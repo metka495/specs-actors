@@ -882,10 +882,7 @@ func (st *State) AssertBalanceInvariants(balance abi.TokenAmount) {
 }
 
 func (st *State) MeetsInitialPledgeCondition(balance abi.TokenAmount) bool {
-	if st.FeeDebt.GreaterThan(big.Zero()) {
-		return false
-	}
-	return true
+	return st.FeeDebt.LessThanEqual(big.Zero())
 }
 
 func (st *State) CanRepayFeeDebt(unlockedBalance abi.TokenAmount) bool {
