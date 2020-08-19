@@ -507,10 +507,10 @@ func (a Actor) PreCommitSector(rt Runtime, params *SectorPreCommitInfo) *adt.Emp
 		newlyVested, err = st.UnlockVestedFunds(store, rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to vest funds")
 		// available balance already accounts for fee debt so it is correct to call
-		// this before VerifyPledgeRequirementsAndRepayDebts. We would have to
+		// this before RepayDebts. We would have to
 		// subtract fee debt explicitly if we called this after.
 		availableBalance := st.GetAvailableBalance(rt.CurrentBalance())
-		feeToBurn = VerifyPledgeRequirementsAndRepayDebts(rt, &st)
+		feeToBurn = RepayDebts(rt, &st)
 
 		info := getMinerInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(append(info.ControlAddresses, info.Owner, info.Worker)...)
@@ -821,7 +821,7 @@ func (a Actor) ConfirmSectorProofsValid(rt Runtime, params *builtin.ConfirmSecto
 			rt.Abortf(exitcode.ErrInsufficientFunds, "insufficient funds for aggregate initial pledge requirement %s, available: %s", totalPledge, availableBalance)
 		}
 
-		st.AddInitialPledgeRequirement(totalPledge)
+		st.AddInitialPledge(totalPledge)
 		st.AssertBalanceInvariants(rt.CurrentBalance())
 	})
 
@@ -1230,7 +1230,7 @@ func (a Actor) DeclareFaultsRecovered(rt Runtime, params *DeclareFaultsRecovered
 	rt.State().Transaction(&st, func() {
 		// Verify unlocked funds cover both InitialPledgeRequirement and FeeDebt
 		// and repay fee debt now.
-		feeToBurn = VerifyPledgeRequirementsAndRepayDebts(rt, &st)
+		feeToBurn = RepayDebts(rt, &st)
 
 		info := getMinerInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(append(info.ControlAddresses, info.Owner, info.Worker)...)
@@ -1509,13 +1509,13 @@ func (a Actor) WithdrawBalance(rt Runtime, params *WithdrawBalanceParams) *adt.E
 			rt.Abortf(exitcode.ErrIllegalState, "failed to vest fund: %v", err)
 		}
 		// available balance already accounts for fee debt so it is correct to call
-		// this before VerifyPledgeRequirementsAndRepayDebts. We would have to
+		// this before RepayDebts. We would have to
 		// subtract fee debt explicitly if we called this after.
 		availableBalance = st.GetAvailableBalance(rt.CurrentBalance())
 
 		// Verify unlocked funds cover both InitialPledgeRequirement and FeeDebt
 		// and repay fee debt now.
-		feeToBurn = VerifyPledgeRequirementsAndRepayDebts(rt, &st)
+		feeToBurn = RepayDebts(rt, &st)
 	})
 
 	amountWithdrawn := big.Min(availableBalance, params.AmountRequested)
@@ -1624,7 +1624,7 @@ func processEarlyTerminations(rt Runtime) (more bool) {
 		penalty = big.Add(penaltyFromVesting, penaltyFromBalance)
 
 		// Remove pledge requirement.
-		st.AddInitialPledgeRequirement(totalInitialPledge.Neg())
+		st.AddInitialPledge(totalInitialPledge.Neg())
 		pledgeDelta = big.Add(totalInitialPledge, penaltyFromVesting).Neg()
 	})
 
@@ -1751,7 +1751,7 @@ func handleProvingDeadline(rt Runtime) {
 			// Pledge for the sectors expiring early is retained to support the termination fee that will be assessed
 			// when the early termination is processed.
 			pledgeDelta = big.Sub(pledgeDelta, expired.OnTimePledge)
-			st.AddInitialPledgeRequirement(expired.OnTimePledge.Neg())
+			st.AddInitialPledge(expired.OnTimePledge.Neg())
 
 			// Record reduction in power of the amount of expiring active power.
 			// Faulty power has already been lost, so the amount expiring can be excluded from the delta.

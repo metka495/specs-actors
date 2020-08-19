@@ -794,8 +794,8 @@ func TestMinerEligibleForElection(t *testing.T) {
 		actor.constructAndVerify(rt)
 		store := adt.AsStore(rt)
 		mSt := getState(rt)
-		mSt.InitialPledgeRequirement = miner.ConsensusFaultPenalty(thisEpochReward)
-		minerBalance := big.Add(mSt.InitialPledgeRequirement, tenFIL)
+		mSt.InitialPledge = miner.ConsensusFaultPenalty(thisEpochReward)
+		minerBalance := big.Add(mSt.InitialPledge, tenFIL)
 		currEpoch := abi.ChainEpoch(100000)
 
 		eligible, err := miner.MinerEligibleForElection(store, mSt, thisEpochReward, minerBalance, currEpoch)
@@ -814,8 +814,8 @@ func TestMinerEligibleForElection(t *testing.T) {
 		err = mSt.SaveInfo(store, info)
 		require.NoError(t, err)
 
-		mSt.InitialPledgeRequirement = miner.ConsensusFaultPenalty(thisEpochReward)
-		minerBalance := big.Add(mSt.InitialPledgeRequirement, tenFIL)
+		mSt.InitialPledge = miner.ConsensusFaultPenalty(thisEpochReward)
+		minerBalance := big.Add(mSt.InitialPledge, tenFIL)
 		currEpoch := abi.ChainEpoch(33) // 33 less than 55 so consensus fault still active
 
 		eligible, err := miner.MinerEligibleForElection(store, mSt, thisEpochReward, minerBalance, currEpoch)
@@ -830,23 +830,8 @@ func TestMinerEligibleForElection(t *testing.T) {
 		mSt := getState(rt)
 		mSt.FeeDebt = abi.NewTokenAmount(1000)
 
-		mSt.InitialPledgeRequirement = miner.ConsensusFaultPenalty(thisEpochReward)
-		minerBalance := big.Add(mSt.InitialPledgeRequirement, tenFIL)
-		currEpoch := abi.ChainEpoch(100000)
-
-		eligible, err := miner.MinerEligibleForElection(store, mSt, thisEpochReward, minerBalance, currEpoch)
-		require.NoError(t, err)
-		assert.False(t, eligible)
-	})
-
-	t.Run("ip debt", func(t *testing.T) {
-		rt := builder.Build(t)
-		actor.constructAndVerify(rt)
-		store := rt.AdtStore()
-		mSt := getState(rt)
-
-		mSt.InitialPledgeRequirement = miner.ConsensusFaultPenalty(thisEpochReward)
-		minerBalance := big.Sub(mSt.InitialPledgeRequirement, abi.NewTokenAmount(1))
+		mSt.InitialPledge = miner.ConsensusFaultPenalty(thisEpochReward)
+		minerBalance := big.Add(mSt.InitialPledge, tenFIL)
 		currEpoch := abi.ChainEpoch(100000)
 
 		eligible, err := miner.MinerEligibleForElection(store, mSt, thisEpochReward, minerBalance, currEpoch)
@@ -860,8 +845,8 @@ func TestMinerEligibleForElection(t *testing.T) {
 		store := rt.AdtStore()
 		mSt := getState(rt)
 
-		mSt.InitialPledgeRequirement = big.Sub(miner.ConsensusFaultPenalty(thisEpochReward), abi.NewTokenAmount(1))
-		minerBalance := big.Add(mSt.InitialPledgeRequirement, tenFIL)
+		mSt.InitialPledge = big.Sub(miner.ConsensusFaultPenalty(thisEpochReward), abi.NewTokenAmount(1))
+		minerBalance := big.Add(mSt.InitialPledge, tenFIL)
 		currEpoch := abi.ChainEpoch(100000)
 
 		eligible, err := miner.MinerEligibleForElection(store, mSt, thisEpochReward, minerBalance, currEpoch)

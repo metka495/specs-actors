@@ -37,7 +37,7 @@ type State struct {
 
 	FeeDebt abi.TokenAmount // Absolute value of debt this miner owes from unpaid fees
 
-	InitialPledgeRequirement abi.TokenAmount // Sum of initial pledge requirements of all active sectors
+	InitialPledge abi.TokenAmount // Sum of initial pledge requirements of all active sectors
 
 	// Sectors that have been pre-committed but not yet proven.
 	PreCommittedSectors cid.Cid // Map, HAMT[SectorNumber]SectorPreCommitOnChainInfo
@@ -171,7 +171,7 @@ func ConstructState(infoCid cid.Cid, periodStart abi.ChainEpoch, emptyBitfieldCi
 
 		VestingFunds: emptyVestingFundsCid,
 
-		InitialPledgeRequirement: abi.NewTokenAmount(0),
+		InitialPledge: abi.NewTokenAmount(0),
 
 		PreCommittedSectors:       emptyMapCid,
 		PreCommittedSectorsExpiry: emptyArrayCid,
@@ -719,11 +719,11 @@ func (st *State) AddPreCommitDeposit(amount abi.TokenAmount) {
 	st.PreCommitDeposits = newTotal
 }
 
-func (st *State) AddInitialPledgeRequirement(amount abi.TokenAmount) {
-	newTotal := big.Add(st.InitialPledgeRequirement, amount)
+func (st *State) AddInitialPledge(amount abi.TokenAmount) {
+	newTotal := big.Add(st.InitialPledge, amount)
 	AssertMsg(newTotal.GreaterThanEqual(big.Zero()), "negative initial pledge requirement %s after adding %s to prior %s",
-		newTotal, amount, st.InitialPledgeRequirement)
-	st.InitialPledgeRequirement = newTotal
+		newTotal, amount, st.InitialPledge)
+	st.InitialPledge = newTotal
 }
 
 // AddLockedFunds first vests and unlocks the vested funds AND then locks the given funds in the vesting table.
@@ -858,34 +858,34 @@ func (st *State) CheckVestedFunds(store adt.Store, currEpoch abi.ChainEpoch) (ab
 	return amountVested, nil
 }
 
-// Unclaimed funds that are not locked -- includes funds used to cover initial pledge requirement
-// does not account for pledge requirements or fee debt.  Always greater than or equal to zero
+// Unclaimed funds that are not locked -- includes free funds and does not
+// account for fee debt.  Always greater than or equal to zero
 func (st *State) GetUnlockedBalance(actorBalance abi.TokenAmount) abi.TokenAmount {
-	unlockedBalance := big.Subtract(actorBalance, st.LockedFunds, st.PreCommitDeposits)
+	unlockedBalance := big.Subtract(actorBalance, st.LockedFunds, st.PreCommitDeposits, st.InitialPledge)
 	Assert(unlockedBalance.GreaterThanEqual(big.Zero()))
 	return unlockedBalance
 }
 
-// Unclaimed funds.  Actor balance - (locked funds, precommit deposit, ip requirement, fee debt)
+// Unclaimed funds.  Actor balance - (locked funds, precommit deposit, initial pledge, fee debt)
 // Can go negative if the miner is in IP debt
 func (st *State) GetAvailableBalance(actorBalance abi.TokenAmount) abi.TokenAmount {
 	unlockedBalance := st.GetUnlockedBalance(actorBalance)
-	return big.Subtract(unlockedBalance, st.InitialPledgeRequirement, st.FeeDebt)
+	return big.Subtract(unlockedBalance, st.FeeDebt)
 }
 
 func (st *State) AssertBalanceInvariants(balance abi.TokenAmount) {
 	Assert(st.PreCommitDeposits.GreaterThanEqual(big.Zero()))
 	Assert(st.LockedFunds.GreaterThanEqual(big.Zero()))
+	Assert(st.InitialPledge.GreaterThanEqual(big.Zero()))
 	Assert(st.FeeDebt.GreaterThanEqual(big.Zero()))
-	Assert(balance.GreaterThanEqual(big.Sum(st.PreCommitDeposits, st.LockedFunds)))
+	Assert(balance.GreaterThanEqual(big.Sum(st.PreCommitDeposits, st.LockedFunds, st.InitialPledge)))
 }
 
 func (st *State) MeetsInitialPledgeCondition(balance abi.TokenAmount) bool {
 	if st.FeeDebt.GreaterThan(big.Zero()) {
 		return false
 	}
-	unlockedBalance := st.GetUnlockedBalance(balance)
-	return unlockedBalance.GreaterThanEqual(st.InitialPledgeRequirement)
+	return true
 }
 
 func (st *State) CanRepayFeeDebt(unlockedBalance abi.TokenAmount) bool {
@@ -974,7 +974,7 @@ func MinerEligibleForElection(store adt.Store, mSt *State, thisEpochReward abi.T
 
 	// IP requirement is sufficient to cover fee for a consensus fault
 	electionRequirement := ConsensusFaultPenalty(thisEpochReward)
-	if mSt.InitialPledgeRequirement.LessThan(electionRequirement) {
+	if mSt.InitialPledge.LessThan(electionRequirement) {
 		return false, nil
 	}
 
