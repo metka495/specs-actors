@@ -914,7 +914,7 @@ func TestCommitments(t *testing.T) {
 		// Deposit and pledge as expected
 		st = getState(rt)
 		assert.Equal(t, st.PreCommitDeposits, big.Add(upgrade1.PreCommitDeposit, upgrade2.PreCommitDeposit))
-		assert.Equal(t, st.InitialPledgeRequirement, oldSector.InitialPledge)
+		assert.Equal(t, st.InitialPledge, oldSector.InitialPledge)
 
 		// Prove new sectors
 		rt.SetEpoch(upgrade1.PreCommitEpoch + miner.PreCommitChallengeDelay + 1)
@@ -932,7 +932,7 @@ func TestCommitments(t *testing.T) {
 		// All three sectors have pledge.
 		st = getState(rt)
 		assert.Equal(t, big.Zero(), st.PreCommitDeposits)
-		assert.Equal(t, st.InitialPledgeRequirement, big.Sum(
+		assert.Equal(t, st.InitialPledge, big.Sum(
 			oldSector.InitialPledge, newSector1.InitialPledge, newSector2.InitialPledge,
 		))
 
@@ -1013,7 +1013,7 @@ func TestCommitments(t *testing.T) {
 		}, dQueue)
 
 		// Old sector gone from pledge requirement and deposit
-		assert.Equal(t, st.InitialPledgeRequirement, big.Add(newSector1.InitialPledge, newSector2.InitialPledge))
+		assert.Equal(t, st.InitialPledge, big.Add(newSector1.InitialPledge, newSector2.InitialPledge))
 		assert.Equal(t, st.LockedFunds, big.Mul(big.NewInt(4), faultPenalty)) // from manual fund addition above - 1 fault penalty
 	})
 
