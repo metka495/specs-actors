@@ -1621,11 +1621,17 @@ func processEarlyTerminations(rt Runtime) (more bool) {
 		unlockedBalance := st.GetUnlockedBalance(rt.CurrentBalance())
 		penaltyFromVesting, penaltyFromBalance, err := st.PenalizeFundsInPriorityOrder(store, rt.CurrEpoch(), penalty, unlockedBalance)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to unlock unvested funds")
+		unlockedBalance = big.Sub(unlockedBalance, penaltyFromBalance)
 		penalty = big.Add(penaltyFromVesting, penaltyFromBalance)
 
 		// Remove pledge requirement.
+		unlockedBalance = big.Add(unlockedBalance, totalInitialPledge)
 		st.AddInitialPledge(totalInitialPledge.Neg())
 		pledgeDelta = big.Add(totalInitialPledge, penaltyFromVesting).Neg()
+
+		feeToBurn := st.RepayPartialDebt(unlockedBalance)
+		unlockedBalance = big.Sub(unlockedBalance, feeToBurn) //nolint:ineffassign
+		penalty = big.Add(penalty, feeToBurn)
 	})
 
 	// We didn't do anything, abort.
@@ -1738,7 +1744,7 @@ func handleProvingDeadline(rt Runtime) {
 			penaltyTarget := PledgePenaltyForDeclaredFault(epochReward.ThisEpochRewardSmoothed, pwrTotal.QualityAdjPowerSmoothed, deadline.FaultyPower.QA)
 			penaltyFromVesting, penaltyFromBalance, err := st.PenalizeFundsInPriorityOrder(store, currEpoch, penaltyTarget, unlockedBalance)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to unlock penalty")
-			unlockedBalance = big.Sub(unlockedBalance, penaltyFromBalance) //nolint:ineffassign
+			unlockedBalance = big.Sub(unlockedBalance, penaltyFromBalance)
 			penaltyTotal = big.Sum(penaltyTotal, penaltyFromVesting, penaltyFromBalance)
 			pledgeDelta = big.Sub(pledgeDelta, penaltyFromVesting)
 		}
@@ -1751,7 +1757,13 @@ func handleProvingDeadline(rt Runtime) {
 			// Pledge for the sectors expiring early is retained to support the termination fee that will be assessed
 			// when the early termination is processed.
 			pledgeDelta = big.Sub(pledgeDelta, expired.OnTimePledge)
+			unlockedBalance = big.Add(unlockedBalance, expired.OnTimePledge)
 			st.AddInitialPledge(expired.OnTimePledge.Neg())
+
+			// Repay any fee debt with freed pledge
+			feeToBurn := st.RepayPartialDebt(unlockedBalance)
+			unlockedBalance = big.Sub(unlockedBalance, feeToBurn) //nolint:ineffassign
+			penaltyTotal = big.Add(penaltyTotal, feeToBurn)
 
 			// Record reduction in power of the amount of expiring active power.
 			// Faulty power has already been lost, so the amount expiring can be excluded from the delta.

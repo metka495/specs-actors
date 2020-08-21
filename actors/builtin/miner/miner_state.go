@@ -793,6 +793,12 @@ func (st *State) RepayDebt(currBalance abi.TokenAmount) (abi.TokenAmount, error)
 	return debtToRepay, nil
 }
 
+func (st *State) RepayPartialDebt(unlockedBalance abi.TokenAmount) abi.TokenAmount {
+	debtToRepay := big.Min(unlockedBalance, st.FeeDebt)
+	st.FeeDebt = big.Sub(st.FeeDebt, debtToRepay)
+	return debtToRepay
+}
+
 // Unlocks an amount of funds that have *not yet vested*, if possible.
 // The soonest-vesting entries are unlocked first.
 // Returns the amount actually unlocked.
