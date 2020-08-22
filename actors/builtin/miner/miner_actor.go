@@ -1629,6 +1629,7 @@ func processEarlyTerminations(rt Runtime) (more bool) {
 		st.AddInitialPledge(totalInitialPledge.Neg())
 		pledgeDelta = big.Add(totalInitialPledge, penaltyFromVesting).Neg()
 
+		// Use unlocked pledge to pay down outstanding fee debt
 		feeToBurn := st.RepayPartialDebt(unlockedBalance)
 		unlockedBalance = big.Sub(unlockedBalance, feeToBurn) //nolint:ineffassign
 		penalty = big.Add(penalty, feeToBurn)
@@ -1736,7 +1737,6 @@ func handleProvingDeadline(rt Runtime) {
 			unlockedBalance = big.Sub(unlockedBalance, penaltyFromBalance)
 			penaltyTotal = big.Sum(penaltyTotal, penaltyFromVesting, penaltyFromBalance)
 			pledgeDelta = big.Sub(pledgeDelta, penaltyFromVesting)
-
 		}
 		{
 			// Record faulty power for penalisation of ongoing faults, before popping expirations.
@@ -1760,7 +1760,7 @@ func handleProvingDeadline(rt Runtime) {
 			unlockedBalance = big.Add(unlockedBalance, expired.OnTimePledge)
 			st.AddInitialPledge(expired.OnTimePledge.Neg())
 
-			// Repay any fee debt with freed pledge
+			// Use unlocked pledge to pay down outstanding fee debt
 			feeToBurn := st.RepayPartialDebt(unlockedBalance)
 			unlockedBalance = big.Sub(unlockedBalance, feeToBurn) //nolint:ineffassign
 			penaltyTotal = big.Add(penaltyTotal, feeToBurn)
@@ -1802,6 +1802,7 @@ func handleProvingDeadline(rt Runtime) {
 	})
 
 	// Remove power for new faults, and burn penalties.
+
 	requestUpdatePower(rt, powerDelta)
 	burnFunds(rt, penaltyTotal)
 	notifyPledgeChanged(rt, pledgeDelta)

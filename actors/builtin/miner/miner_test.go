@@ -1633,6 +1633,45 @@ func TestDeadlineCron(t *testing.T) {
 		assert.Equal(t, periodOffset+miner.WPoStProvingPeriod, st.ProvingPeriodStart)
 	})
 
+	t.Run("sector expires", func(t *testing.T) {
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt)
+
+		sectors := actor.commitAndProveSectors(rt, 1, defaultSectorExpiration, nil)
+		// advance cron to activate power.
+		advanceAndSubmitPoSts(rt, actor, sectors...)
+		activePower := miner.PowerForSectors(actor.sectorSize, sectors)
+
+		st := getState(rt)
+		initialPledge := st.InitialPledge
+		expiration := sectors[0].Expiration
+
+		// setup state to simulate moving forward all the way to expiry
+		dlIdx, _, err := st.FindSector(rt.AdtStore(), sectors[0].SectorNumber)
+		require.NoError(t, err)
+		expirationPeriod := (expiration / miner.WPoStProvingPeriod + 1)*miner.WPoStProvingPeriod
+		st.ProvingPeriodStart = expirationPeriod
+		st.CurrentDeadline = dlIdx
+		rt.ReplaceState(st)
+
+		// Advance to expiration epoch and expect expiration during cron
+		rt.SetEpoch(expiration)	
+		powerDelta := activePower.Neg()
+		// because we skip forward in state and don't post we incur SP
+		expectedFee := actor.undeclaredFaultPenalty(sectors) 
+		// Add lots of funds so expectedFee is taken from locked funds
+		initialLocked := big.Mul(big.NewInt(400), big.NewInt(1e18))
+		actor.addLockedFunds(rt, initialLocked)
+
+		advanceDeadline(rt, actor, &cronConfig{
+			expectedEnrollment: rt.Epoch() + miner.WPoStChallengeWindow,
+			expiredSectorsPowerDelta: &powerDelta,
+			expiredSectorsPledgeDelta: initialPledge.Neg(),
+			detectedFaultsPenalty: expectedFee,
+		})
+
+	})
+
 	t.Run("detects and penalizes faults", func(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)
@@ -3905,6 +3944,8 @@ func (h *actorHarness) onDeadlineCron(rt *mock.Runtime, config *cronConfig) {
 	}
 	if !penaltyTotal.IsZero() {
 		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, penaltyTotal, nil, exitcode.Ok)
+		// TODO this forces tests to take funds from locked funds instead of balance.
+		// We should make other cases possible by pushing complexity to the config
 		pledgeDelta = big.Sub(pledgeDelta, penaltyTotal)
 	}
 
